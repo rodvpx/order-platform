@@ -1,10 +1,17 @@
 package com.backendlab.product_service.exception;
 
+import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
+import java.math.BigDecimal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -12,6 +19,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -79,6 +88,29 @@ class GlobalExceptionHandlerTest {
         .andExpect(jsonPath("$.detail").value(expectedMessage));
   }
 
+  @Test
+  void shouldReturn400WithFieldErrorsWhenRequestBodyIsInvalid() throws Exception {
+    // Given
+    String invalidBody = """
+                {"name": "", "price": -1}
+                """;
+
+    // When
+    ResultActions result =
+        mockMvc.perform(
+            post("/test/validation").contentType(MediaType.APPLICATION_JSON).content(invalidBody));
+
+    // Then
+    result
+        .andExpect(status().isBadRequest())
+        .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+        .andExpect(jsonPath("$.title").value("Validation error"))
+        .andExpect(jsonPath("$.detail").value("Validation failed"))
+        .andExpect(jsonPath("$.errors", hasSize(2)))
+        .andExpect(jsonPath("$.errors[?(@.field == 'name')]").exists())
+        .andExpect(jsonPath("$.errors[?(@.field == 'price')]").exists());
+  }
+
   @RestController
   @RequestMapping("/test")
   public static class StubController {
@@ -97,5 +129,10 @@ class GlobalExceptionHandlerTest {
     public void throwBusinessRule() {
       throw new BusinessRuleException(BUSINESS_RULE_MESSAGE);
     }
+
+    @PostMapping("/validation")
+    public void validate(@Valid @RequestBody StubRequest request) {}
+
+    public record StubRequest(@NotBlank String name, @NotNull @Positive BigDecimal price) {}
   }
 }
