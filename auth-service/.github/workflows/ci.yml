@@ -1,0 +1,39 @@
+name: CI Spring Boot
+
+on:
+  push:
+    branches: ["main", "develop"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    env:
+      JWT_SECRET: ci-only-test-secret-key-with-more-than-32-chars
+      JWT_EXPIRATION: 3600000
+      DB_URL: jdbc:postgresql://localhost:5432/authdb
+      DB_USER: authuser
+      DB_PASSWORD: authpass
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'maven'
+
+      - name: Grant execute permission for mvnw
+        run: chmod +x mvnw
+
+      - name: Run tests and build
+        run: ./mvnw clean verify
+
+      - name: Build Docker image
+        run: docker build -t auth-service:${{ github.sha }} .
